@@ -19,7 +19,7 @@ public class Step2a {
 
         @Override
         protected void setup(Context context) throws IOException, InterruptedException {
-            // Hardcoded centroids (Replace this with distributed cache reading in multi-iteration)
+            // Hardcoded centroids
             centroids.add(new double[]{1000, 1000});
             centroids.add(new double[]{3000, 3000});
             centroids.add(new double[]{5000, 5000});

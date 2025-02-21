@@ -10,9 +10,7 @@ import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.StringTokenizer;
+import java.util.*;
 
 public class Step2e {
     public static class KMeansMapper extends Mapper<Object, Text, Text, Text> {
@@ -93,16 +91,13 @@ public class Step2e {
             }
         }
     }
-    // I need to add a part that return the final clustered data points along with their cluster centers!!!
+
     // Output Convergence Status
     private static void writeConvergenceStatus(String outputPath, boolean converged) throws IOException {
-        // Ensure the directory exists
         File outputDir = new File(outputPath);
         if (!outputDir.exists()) {
-            outputDir.mkdirs();  // Create directory if it does not exist
+            outputDir.mkdirs();
         }
-
-        // Write convergence status
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath + "/convergence_status.txt"))) {
             writer.write(converged ? "yes - it has converged" : "no - it has not yet converged");
         }
@@ -120,6 +115,52 @@ public class Step2e {
             if (distance > threshold) return false;
         }
         return true;
+    }
+
+    // This outputs clustered data that returns the final clustered data points along with their cluster centers!!!
+    private static void saveFinalClusteredData(String inputPath, String centroidsPath, String outputPath) throws IOException {
+        // Read the final centroids
+        List<double[]> centroids = readCentroids(centroidsPath);
+
+        // Create a map to store points for each centroid
+        Map<String, List<String>> clusteredData = new HashMap<>();
+
+        // Read data points and assign them to the nearest centroid
+        try (BufferedReader reader = new BufferedReader(new FileReader(inputPath))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                StringTokenizer tokenizer = new StringTokenizer(line, ",");
+                double x = Double.parseDouble(tokenizer.nextToken());
+                double y = Double.parseDouble(tokenizer.nextToken());
+
+                // Find the nearest centroid
+                double minDistance = Double.MAX_VALUE;
+                String nearestCentroid = "";
+
+                for (double[] centroid : centroids) {
+                    double distance = Math.sqrt(Math.pow((centroid[0] - x), 2) + Math.pow((centroid[1] - y), 2));
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        nearestCentroid = centroid[0] + "," + centroid[1];
+                    }
+                }
+
+                // Add data point to its centroid's list
+                clusteredData.computeIfAbsent(nearestCentroid, k -> new ArrayList<>()).add(x + "," + y);
+            }
+        }
+
+        // Write clustered data to file
+        File outputFile = new File(outputPath + "/final_clustered_data.txt");
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFile))) {
+            for (Map.Entry<String, List<String>> entry : clusteredData.entrySet()) {
+                writer.write("Centroid: " + entry.getKey() + "\n");
+                for (String point : entry.getValue()) {
+                    writer.write("  " + point + "\n");
+                }
+                writer.write("\n"); // Separate clusters
+            }
+        }
     }
 
     private static List<double[]> readCentroids(String filePath) throws IOException {
@@ -171,6 +212,20 @@ public class Step2e {
 
             converged = checkConvergence(oldCentroids, newCentroids, convergenceThreshold);
 
+            // check each centroid to see which centroid reach convergence
+            // after each iteration the convergence statement should be printed out in the console
+            System.out.println("Iteration " + iteration + ":");
+            for (int i = 0; i < oldCentroids.size(); i++) {
+                double dx = oldCentroids.get(i)[0] - newCentroids.get(i)[0];
+                double dy = oldCentroids.get(i)[1] - newCentroids.get(i)[1];
+                double distance = Math.sqrt(dx * dx + dy * dy);
+                if (distance <= convergenceThreshold) {
+                    System.out.println("Centroid " + i + " has converged.");
+                } else {
+                    System.out.println("Centroid " + i + " has not yet converged.");
+                }
+            }
+
             centroidsPath = outputPath + "_iter_" + iteration + "/part-r-00000";
 
             iteration++;
@@ -178,5 +233,6 @@ public class Step2e {
 
         System.out.println("Final K-Means completed after " + iteration + " iterations.");
         writeConvergenceStatus(outputPath, converged);
+        saveFinalClusteredData(inputPath, centroidsPath, outputPath);
     }
 }
