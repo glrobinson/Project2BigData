@@ -8,6 +8,8 @@ import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -18,11 +20,18 @@ public class Step2a {
         private List<double[]> centroids = new ArrayList<>();
 
         @Override
-        protected void setup(Context context) throws IOException, InterruptedException {
-            // Hardcoded centroids
-            centroids.add(new double[]{1000, 1000});
-            centroids.add(new double[]{3000, 3000});
-            centroids.add(new double[]{5000, 5000});
+        protected void setup(Context context) throws IOException {
+            // Read centroids from local file system
+            String centroidsFile = context.getConfiguration().get("centroids.path");
+            try (BufferedReader reader = new BufferedReader(new FileReader(centroidsFile))) {
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    StringTokenizer tokenizer = new StringTokenizer(line, ",");
+                    double x = Double.parseDouble(tokenizer.nextToken());
+                    double y = Double.parseDouble(tokenizer.nextToken());
+                    centroids.add(new double[]{x, y});
+                }
+            }
         }
 
         @Override
@@ -68,22 +77,49 @@ public class Step2a {
             if (count > 0) {
                 double newX = sumX / count;
                 double newY = sumY / count;
-                context.write(key, new Text(newX + "," + newY));
+                context.write(new Text(newX + "," + newY), new Text(""));
             }
         }
     }
     public static void main(String[] args) throws Exception {
-        Configuration conf = new Configuration();
-        conf.setInt("max.iterations", 1); // Run only 1 iteration
+        long timeNow = System.currentTimeMillis();
+        // Use local file system paths instead of HDFS
+        String inputPath = "/Users/gracerobinson/Project2_BigData/Project2/data_points.txt";
+        String outputPath = "/Users/gracerobinson/Project2_BigData/Project2/outputProblem1/step2a";
+        String centroidsPath = "/Users/gracerobinson/Project2_BigData/Project2/centroids.txt";
 
-        Job job = Job.getInstance(conf, "Single Iteration KMeans");
-        job.setJarByClass(Step2a.class);
-        job.setMapperClass(KMeansMapper.class);
-        job.setReducerClass(KMeansReducer.class);
-        job.setOutputKeyClass(Text.class);
-        job.setOutputValueClass(Text.class);
-        FileInputFormat.addInputPath(job, new Path("/Users/gracerobinson/Project2_BigData/Project2/data_points.txt"));
-        FileOutputFormat.setOutputPath(job, new Path("/Users/gracerobinson/Project2_BigData/Project2/outputProblem1/step2a"));
-        System.exit(job.waitForCompletion(true) ? 0 : 1);
+        Configuration conf = new Configuration();
+        int maxIterations = 1;
+        int iteration = 0;
+
+        while (iteration < maxIterations) {
+            System.out.println("Running iteration: " + (iteration + 1));
+
+            // Set current centroids as input
+            conf.set("centroids.path", centroidsPath);
+
+            Job job = Job.getInstance(conf, "K-Means Iteration " + (iteration + 1));
+            job.setJarByClass(Step2b.class);
+            job.setMapperClass(Step2b.KMeansMapper.class);
+            job.setReducerClass(Step2b.KMeansReducer.class);
+            job.setOutputKeyClass(Text.class);
+            job.setOutputValueClass(Text.class);
+
+            FileInputFormat.addInputPath(job, new Path(inputPath)); // Input dataset
+            Path outputIterationPath = new Path(outputPath + "_iter_" + iteration);
+            FileOutputFormat.setOutputPath(job, outputIterationPath);
+
+            job.waitForCompletion(true);
+
+            // Update centroids file for next iteration
+            centroidsPath = outputPath + "_iter_" + iteration + "/part-r-00000";
+
+            iteration++;
+        }
+
+        System.out.println("K-Means completed after " + maxIterations + " iterations.");
+        long timeFinish = System.currentTimeMillis();
+        double seconds = (timeFinish - timeNow) /1000.0;
+        System.out.println(seconds + "  seconds");
     }
 }

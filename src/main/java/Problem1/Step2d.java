@@ -122,6 +122,7 @@ public class Step2d {
     }
 
     public static void main(String[] args) throws Exception {
+        long timeNow = System.currentTimeMillis();
         String inputPath = "/Users/gracerobinson/Project2_BigData/Project2/data_points.txt";
         String outputPath = "/Users/gracerobinson/Project2_BigData/Project2/outputProblem1/step2d";
         String centroidsPath = "/Users/gracerobinson/Project2_BigData/Project2/centroids.txt";
@@ -162,5 +163,8 @@ public class Step2d {
         }
 
         System.out.println("Optimized K-Means completed after " + iteration + " iterations.");
+        long timeFinish = System.currentTimeMillis();
+        double seconds = (timeFinish - timeNow) /1000.0;
+        System.out.println(seconds + "  seconds");
     }
 }

@@ -81,7 +81,7 @@ public class Step2b {
         }
     }
     public static void main(String[] args) throws Exception {
-
+        long timeNow = System.currentTimeMillis();
         // Use local file system paths instead of HDFS
         String inputPath = "/Users/gracerobinson/Project2_BigData/Project2/data_points.txt";
         String outputPath = "/Users/gracerobinson/Project2_BigData/Project2/outputProblem1/step2b";
@@ -117,5 +117,8 @@ public class Step2b {
         }
 
         System.out.println("K-Means completed after " + maxIterations + " iterations.");
+        long timeFinish = System.currentTimeMillis();
+        double seconds = (timeFinish - timeNow) /1000.0;
+        System.out.println(seconds + "  seconds");
     }
 }

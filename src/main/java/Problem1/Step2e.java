@@ -178,6 +178,7 @@ public class Step2e {
     }
 
     public static void main(String[] args) throws Exception {
+        long timeNow = System.currentTimeMillis();
         String inputPath = "/Users/gracerobinson/Project2_BigData/Project2/data_points.txt";
         String outputPath = "/Users/gracerobinson/Project2_BigData/Project2/outputProblem1/step2e";
         String centroidsPath = "/Users/gracerobinson/Project2_BigData/Project2/centroids.txt";
@@ -214,8 +215,9 @@ public class Step2e {
 
             // check each centroid to see which centroid reach convergence
             // after each iteration the convergence statement should be printed out in the console
-            System.out.println("Iteration " + iteration + ":");
-            for (int i = 0; i < oldCentroids.size(); i++) {
+            int numCentroids = Math.min(oldCentroids.size(), newCentroids.size());
+
+            for (int i = 0; i < numCentroids; i++) {
                 double dx = oldCentroids.get(i)[0] - newCentroids.get(i)[0];
                 double dy = oldCentroids.get(i)[1] - newCentroids.get(i)[1];
                 double distance = Math.sqrt(dx * dx + dy * dy);
@@ -231,8 +233,11 @@ public class Step2e {
             iteration++;
         }
 
-        System.out.println("Final K-Means completed after " + iteration + " iterations.");
+        System.out.println("K-Means completed after " + iteration + " iterations.");
         writeConvergenceStatus(outputPath, converged);
         saveFinalClusteredData(inputPath, centroidsPath, outputPath);
+        long timeFinish = System.currentTimeMillis();
+        double seconds = (timeFinish - timeNow) /1000.0;
+        System.out.println(seconds + "  seconds");
     }
 }
