@@ -20,7 +20,6 @@ public class Step2c {
 
         @Override
         protected void setup(Context context) throws IOException {
-            // Read centroids from local file system
             String centroidsFile = context.getConfiguration().get("centroids.path");
             try (BufferedReader reader = new BufferedReader(new FileReader(centroidsFile))) {
                 String line;
@@ -41,7 +40,7 @@ public class Step2c {
             double x = Double.parseDouble(tokenizer.nextToken());
             double y = Double.parseDouble(tokenizer.nextToken());
 
-            // Find the nearest centroid
+            // This is so I can find the nearest centroid
             double minDistance = Double.MAX_VALUE;
             String nearestCentroid = "";
 
@@ -52,8 +51,6 @@ public class Step2c {
                     nearestCentroid = centroid[0] + "," + centroid[1];
                 }
             }
-
-            // Emit (nearest centroid, data point)
             context.write(new Text(nearestCentroid), new Text(x + "," + y));
         }
     }
@@ -61,7 +58,8 @@ public class Step2c {
     public static class KMeansReducer extends Reducer<Text, Text, Text, Text> {
         @Override
         protected void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-            double sumX = 0, sumY = 0;
+            double sumX = 0;
+            double sumY = 0;
             int count = 0;
 
             for (Text value : values) {
@@ -81,7 +79,7 @@ public class Step2c {
         }
     }
 
-    // helpers
+    // Helper functions
     private static List<double[]> readCentroids(String filePath) throws IOException {
         List<double[]> centroids = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
@@ -95,7 +93,6 @@ public class Step2c {
         }
         return centroids;
     }
-
     private static boolean checkConvergence(List<double[]> oldCentroids, List<double[]> newCentroids, double threshold) {
         if (oldCentroids.size() != newCentroids.size()) return false;
 
@@ -111,21 +108,21 @@ public class Step2c {
 
     public static void main(String[] args) throws Exception {
         long timeNow = System.currentTimeMillis();
-        // Local paths for dataset and centroids
         String inputPath = "/Users/gracerobinson/Project2_BigData/Project2/data_points.txt";
         String outputPath = "/Users/gracerobinson/Project2_BigData/Project2/outputProblem1/step2c";
         String centroidsPath = "/Users/gracerobinson/Project2_BigData/Project2/centroids.txt";
 
         Configuration conf = new Configuration();
-        int maxIterations = 20; // R = 20
-        double convergenceThreshold = 0.001; // ε (small threshold for convergence)
+        int maxIterations = 20;
+        // This is here for the convergence threshold
+        double convergenceThreshold = 0.001;
         int iteration = 0;
         boolean converged = false;
 
         while (iteration < maxIterations && !converged) {
             System.out.println("Running iteration: " + (iteration + 1));
 
-            // Set current centroids as input
+            // This is here in order to set current centroids as the input
             conf.set("centroids.path", centroidsPath);
 
             Job job = Job.getInstance(conf, "K-Means Iteration " + (iteration + 1));
@@ -134,23 +131,16 @@ public class Step2c {
             job.setReducerClass(KMeansReducer.class);
             job.setOutputKeyClass(Text.class);
             job.setOutputValueClass(Text.class);
-
             FileInputFormat.addInputPath(job, new Path(inputPath));
             Path outputIterationPath = new Path(outputPath + "_iter_" + iteration);
             FileOutputFormat.setOutputPath(job, outputIterationPath);
-
             job.waitForCompletion(true);
-
-            // Read old and new centroids to check convergence
+            // This is here to check for convergence stuff
             List<double[]> oldCentroids = readCentroids(centroidsPath);
             List<double[]> newCentroids = readCentroids(outputPath + "_iter_" + iteration + "/part-r-00000");
-
-            // Check for convergence
             converged = checkConvergence(oldCentroids, newCentroids, convergenceThreshold);
-
-            // Update centroids for the next iteration
+            // This is here in order to update the files after each iteration
             centroidsPath = outputPath + "_iter_" + iteration + "/part-r-00000";
-
             iteration++;
         }
 

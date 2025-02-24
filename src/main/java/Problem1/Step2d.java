@@ -40,6 +40,7 @@ public class Step2d {
             double x = Double.parseDouble(tokenizer.nextToken());
             double y = Double.parseDouble(tokenizer.nextToken());
 
+            // This is so I can find the nearest centroid
             double minDistance = Double.MAX_VALUE;
             String nearestCentroid = "";
 
@@ -50,12 +51,11 @@ public class Step2d {
                     nearestCentroid = centroid[0] + "," + centroid[1];
                 }
             }
-
             context.write(new Text(nearestCentroid), new Text(x + "," + y + ",1"));
         }
     }
 
-    // combiner
+    // Combiner yay!
     public static class KMeansCombiner extends Reducer<Text, Text, Text, Text> {
         @Override
         protected void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
@@ -76,7 +76,8 @@ public class Step2d {
     public static class KMeansReducer extends Reducer<Text, Text, Text, Text> {
         @Override
         protected void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-            double sumX = 0, sumY = 0;
+            double sumX = 0;
+            double sumY = 0;
             int count = 0;
 
             for (Text value : values) {
@@ -94,19 +95,7 @@ public class Step2d {
         }
     }
 
-    // helper
-    private static boolean checkConvergence(List<double[]> oldCentroids, List<double[]> newCentroids, double threshold) {
-        if (oldCentroids.size() != newCentroids.size()) return false;
-
-        for (int i = 0; i < oldCentroids.size(); i++) {
-            double dx = oldCentroids.get(i)[0] - newCentroids.get(i)[0];
-            double dy = oldCentroids.get(i)[1] - newCentroids.get(i)[1];
-            double distance = Math.sqrt(dx * dx + dy * dy);
-
-            if (distance > threshold) return false;
-        }
-        return true;
-    }
+    // Helper functions
     private static List<double[]> readCentroids(String filePath) throws IOException {
         List<double[]> centroids = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
@@ -120,6 +109,18 @@ public class Step2d {
         }
         return centroids;
     }
+    private static boolean checkConvergence(List<double[]> oldCentroids, List<double[]> newCentroids, double threshold) {
+        if (oldCentroids.size() != newCentroids.size()) return false;
+
+        for (int i = 0; i < oldCentroids.size(); i++) {
+            double dx = oldCentroids.get(i)[0] - newCentroids.get(i)[0];
+            double dy = oldCentroids.get(i)[1] - newCentroids.get(i)[1];
+            double distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance > threshold) return false;
+        }
+        return true;
+    }
 
     public static void main(String[] args) throws Exception {
         long timeNow = System.currentTimeMillis();
@@ -129,6 +130,7 @@ public class Step2d {
 
         Configuration conf = new Configuration();
         int maxIterations = 20;
+        // This is here for the convergence threshold
         double convergenceThreshold = 0.001;
         int iteration = 0;
         boolean converged = false;
@@ -136,33 +138,30 @@ public class Step2d {
         while (iteration < maxIterations && !converged) {
             System.out.println("Running iteration: " + (iteration + 1));
 
+            // This is here in order to set current centroids as the input
             conf.set("centroids.path", centroidsPath);
 
             Job job = Job.getInstance(conf, "Optimized K-Means Iteration " + (iteration + 1));
             job.setJarByClass(Step2d.class);
             job.setMapperClass(KMeansMapper.class);
-            job.setCombinerClass(KMeansCombiner.class); // 💡 NEW: Added Combiner!
+            job.setCombinerClass(KMeansCombiner.class);
             job.setReducerClass(KMeansReducer.class);
             job.setOutputKeyClass(Text.class);
             job.setOutputValueClass(Text.class);
-
             FileInputFormat.addInputPath(job, new Path(inputPath));
             Path outputIterationPath = new Path(outputPath + "_iter_" + iteration);
             FileOutputFormat.setOutputPath(job, outputIterationPath);
-
             job.waitForCompletion(true);
-
+            // This is here to check for convergence stuff
             List<double[]> oldCentroids = readCentroids(centroidsPath);
             List<double[]> newCentroids = readCentroids(outputPath + "_iter_" + iteration + "/part-r-00000");
-
             converged = checkConvergence(oldCentroids, newCentroids, convergenceThreshold);
-
+            // This is here in order to update the files after each iteration
             centroidsPath = outputPath + "_iter_" + iteration + "/part-r-00000";
-
             iteration++;
         }
 
-        System.out.println("Optimized K-Means completed after " + iteration + " iterations.");
+        System.out.println("K-Means completed after " + iteration + " iterations.");
         long timeFinish = System.currentTimeMillis();
         double seconds = (timeFinish - timeNow) /1000.0;
         System.out.println(seconds + "  seconds");

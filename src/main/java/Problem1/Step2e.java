@@ -38,6 +38,7 @@ public class Step2e {
             double x = Double.parseDouble(tokenizer.nextToken());
             double y = Double.parseDouble(tokenizer.nextToken());
 
+            // This is so I can find the nearest centroid
             double minDistance = Double.MAX_VALUE;
             String nearestCentroid = "";
 
@@ -48,12 +49,11 @@ public class Step2e {
                     nearestCentroid = centroid[0] + "," + centroid[1];
                 }
             }
-
             context.write(new Text(nearestCentroid), new Text(x + "," + y + ",1"));
         }
     }
 
-    // combiner
+    // Combiner yay!
     public static class KMeansCombiner extends Reducer<Text, Text, Text, Text> {
         @Override
         protected void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
@@ -74,7 +74,8 @@ public class Step2e {
     public static class KMeansReducer extends Reducer<Text, Text, Text, Text> {
         @Override
         protected void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-            double sumX = 0, sumY = 0;
+            double sumX = 0;
+            double sumY = 0;
             int count = 0;
 
             for (Text value : values) {
@@ -92,77 +93,7 @@ public class Step2e {
         }
     }
 
-    // Output Convergence Status
-    private static void writeConvergenceStatus(String outputPath, boolean converged) throws IOException {
-        File outputDir = new File(outputPath);
-        if (!outputDir.exists()) {
-            outputDir.mkdirs();
-        }
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath + "/convergence_status.txt"))) {
-            writer.write(converged ? "yes - it has converged" : "no - it has not yet converged");
-        }
-    }
-
-    // helper
-    private static boolean checkConvergence(List<double[]> oldCentroids, List<double[]> newCentroids, double threshold) {
-        if (oldCentroids.size() != newCentroids.size()) return false;
-
-        for (int i = 0; i < oldCentroids.size(); i++) {
-            double dx = oldCentroids.get(i)[0] - newCentroids.get(i)[0];
-            double dy = oldCentroids.get(i)[1] - newCentroids.get(i)[1];
-            double distance = Math.sqrt(dx * dx + dy * dy);
-
-            if (distance > threshold) return false;
-        }
-        return true;
-    }
-
-    // This outputs clustered data that returns the final clustered data points along with their cluster centers!!!
-    private static void saveFinalClusteredData(String inputPath, String centroidsPath, String outputPath) throws IOException {
-        // Read the final centroids
-        List<double[]> centroids = readCentroids(centroidsPath);
-
-        // Create a map to store points for each centroid
-        Map<String, List<String>> clusteredData = new HashMap<>();
-
-        // Read data points and assign them to the nearest centroid
-        try (BufferedReader reader = new BufferedReader(new FileReader(inputPath))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                StringTokenizer tokenizer = new StringTokenizer(line, ",");
-                double x = Double.parseDouble(tokenizer.nextToken());
-                double y = Double.parseDouble(tokenizer.nextToken());
-
-                // Find the nearest centroid
-                double minDistance = Double.MAX_VALUE;
-                String nearestCentroid = "";
-
-                for (double[] centroid : centroids) {
-                    double distance = Math.sqrt(Math.pow((centroid[0] - x), 2) + Math.pow((centroid[1] - y), 2));
-                    if (distance < minDistance) {
-                        minDistance = distance;
-                        nearestCentroid = centroid[0] + "," + centroid[1];
-                    }
-                }
-
-                // Add data point to its centroid's list
-                clusteredData.computeIfAbsent(nearestCentroid, k -> new ArrayList<>()).add(x + "," + y);
-            }
-        }
-
-        // Write clustered data to file
-        File outputFile = new File(outputPath + "/final_clustered_data.txt");
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFile))) {
-            for (Map.Entry<String, List<String>> entry : clusteredData.entrySet()) {
-                writer.write("Centroid: " + entry.getKey() + "\n");
-                for (String point : entry.getValue()) {
-                    writer.write("  " + point + "\n");
-                }
-                writer.write("\n"); // Separate clusters
-            }
-        }
-    }
-
+    // Helper functions
     private static List<double[]> readCentroids(String filePath) throws IOException {
         List<double[]> centroids = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
@@ -176,6 +107,65 @@ public class Step2e {
         }
         return centroids;
     }
+    private static boolean checkConvergence(List<double[]> oldCentroids, List<double[]> newCentroids, double threshold) {
+        if (oldCentroids.size() != newCentroids.size()) return false;
+
+        for (int i = 0; i < oldCentroids.size(); i++) {
+            double dx = oldCentroids.get(i)[0] - newCentroids.get(i)[0];
+            double dy = oldCentroids.get(i)[1] - newCentroids.get(i)[1];
+            double distance = Math.sqrt(dx * dx + dy * dy);
+
+            if (distance > threshold) return false;
+        }
+        return true;
+    }
+    // Output Convergence Status
+    private static void writeConvergenceStatus(String outputPath, boolean converged) throws IOException {
+        File outputDir = new File(outputPath);
+        if (!outputDir.exists()) {
+            outputDir.mkdirs();
+        }
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputPath + "/convergence_status.txt"))) {
+            writer.write(converged ? "yes - it has converged" : "no - it has not yet converged");
+        }
+    }
+    // This outputs clustered data that returns the final clustered data points along with their cluster centers!!!
+    private static void saveFinalClusteredData(String inputPath, String centroidsPath, String outputPath) throws IOException {
+        List<double[]> centroids = readCentroids(centroidsPath);
+        Map<String, List<String>> clusteredData = new HashMap<>();
+
+        // Assign data points to the nearest centroid
+        try (BufferedReader reader = new BufferedReader(new FileReader(inputPath))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                StringTokenizer tokenizer = new StringTokenizer(line, ",");
+                double x = Double.parseDouble(tokenizer.nextToken());
+                double y = Double.parseDouble(tokenizer.nextToken());
+                // This is so I can find the nearest centroid
+                double minDistance = Double.MAX_VALUE;
+                String nearestCentroid = "";
+
+                for (double[] centroid : centroids) {
+                    double distance = Math.sqrt(Math.pow((centroid[0] - x), 2) + Math.pow((centroid[1] - y), 2));
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        nearestCentroid = centroid[0] + "," + centroid[1];
+                    }
+                }
+                clusteredData.computeIfAbsent(nearestCentroid, k -> new ArrayList<>()).add(x + "," + y);
+            }
+        }
+        File outputFile = new File(outputPath + "/final_clustered_data.txt");
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(outputFile))) {
+            for (Map.Entry<String, List<String>> entry : clusteredData.entrySet()) {
+                writer.write("Centroid: " + entry.getKey() + "\n");
+                for (String point : entry.getValue()) {
+                    writer.write("  " + point + "\n");
+                }
+                writer.write("\n");
+            }
+        }
+    }
 
     public static void main(String[] args) throws Exception {
         long timeNow = System.currentTimeMillis();
@@ -185,6 +175,7 @@ public class Step2e {
 
         Configuration conf = new Configuration();
         int maxIterations = 20;
+        // This is here for the convergence threshold
         double convergenceThreshold = 0.001;
         int iteration = 0;
         boolean converged = false;
@@ -192,29 +183,27 @@ public class Step2e {
         while (iteration < maxIterations && !converged) {
             System.out.println("Running iteration: " + (iteration + 1));
 
+            // This is here in order to set current centroids as the input
             conf.set("centroids.path", centroidsPath);
 
-            Job job = Job.getInstance(conf, "Final K-Means Iteration " + (iteration + 1));
+            Job job = Job.getInstance(conf, "K-Means Iteration " + (iteration + 1));
             job.setJarByClass(Step2e.class);
             job.setMapperClass(KMeansMapper.class);
             job.setCombinerClass(KMeansCombiner.class);
             job.setReducerClass(KMeansReducer.class);
             job.setOutputKeyClass(Text.class);
             job.setOutputValueClass(Text.class);
-
             FileInputFormat.addInputPath(job, new Path(inputPath));
             Path outputIterationPath = new Path(outputPath + "_iter_" + iteration);
             FileOutputFormat.setOutputPath(job, outputIterationPath);
-
             job.waitForCompletion(true);
-
+            // This is here to check for convergence stuff
             List<double[]> oldCentroids = readCentroids(centroidsPath);
             List<double[]> newCentroids = readCentroids(outputPath + "_iter_" + iteration + "/part-r-00000");
-
             converged = checkConvergence(oldCentroids, newCentroids, convergenceThreshold);
 
-            // check each centroid to see which centroid reach convergence
-            // after each iteration the convergence statement should be printed out in the console
+            // Check each centroid to see which centroid reach convergence
+            // After each iteration the convergence statement should be printed out in the console
             int numCentroids = Math.min(oldCentroids.size(), newCentroids.size());
 
             for (int i = 0; i < numCentroids; i++) {
@@ -227,9 +216,8 @@ public class Step2e {
                     System.out.println("Centroid " + i + " has not yet converged.");
                 }
             }
-
+            // This is here in order to update the files after each iteration
             centroidsPath = outputPath + "_iter_" + iteration + "/part-r-00000";
-
             iteration++;
         }
 

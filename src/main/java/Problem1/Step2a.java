@@ -21,7 +21,6 @@ public class Step2a {
 
         @Override
         protected void setup(Context context) throws IOException {
-            // Read centroids from local file system
             String centroidsFile = context.getConfiguration().get("centroids.path");
             try (BufferedReader reader = new BufferedReader(new FileReader(centroidsFile))) {
                 String line;
@@ -42,7 +41,7 @@ public class Step2a {
             double x = Double.parseDouble(tokenizer.nextToken());
             double y = Double.parseDouble(tokenizer.nextToken());
 
-            // Find the nearest centroid
+            // This is so I can find the nearest centroid
             double minDistance = Double.MAX_VALUE;
             String nearestCentroid = "";
 
@@ -53,8 +52,6 @@ public class Step2a {
                     nearestCentroid = centroid[0] + "," + centroid[1];
                 }
             }
-
-            // Emit (nearest centroid, data point)
             context.write(new Text(nearestCentroid), new Text(x + "," + y));
         }
     }
@@ -62,7 +59,8 @@ public class Step2a {
     public static class KMeansReducer extends Reducer<Text, Text, Text, Text> {
         @Override
         protected void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
-            double sumX = 0, sumY = 0;
+            double sumX = 0;
+            double sumY = 0;
             int count = 0;
 
             for (Text value : values) {
@@ -83,7 +81,6 @@ public class Step2a {
     }
     public static void main(String[] args) throws Exception {
         long timeNow = System.currentTimeMillis();
-        // Use local file system paths instead of HDFS
         String inputPath = "/Users/gracerobinson/Project2_BigData/Project2/data_points.txt";
         String outputPath = "/Users/gracerobinson/Project2_BigData/Project2/outputProblem1/step2a";
         String centroidsPath = "/Users/gracerobinson/Project2_BigData/Project2/centroids.txt";
@@ -95,7 +92,7 @@ public class Step2a {
         while (iteration < maxIterations) {
             System.out.println("Running iteration: " + (iteration + 1));
 
-            // Set current centroids as input
+            // This is here in order to set current centroids as the input
             conf.set("centroids.path", centroidsPath);
 
             Job job = Job.getInstance(conf, "K-Means Iteration " + (iteration + 1));
@@ -104,16 +101,12 @@ public class Step2a {
             job.setReducerClass(Step2b.KMeansReducer.class);
             job.setOutputKeyClass(Text.class);
             job.setOutputValueClass(Text.class);
-
-            FileInputFormat.addInputPath(job, new Path(inputPath)); // Input dataset
+            FileInputFormat.addInputPath(job, new Path(inputPath));
             Path outputIterationPath = new Path(outputPath + "_iter_" + iteration);
             FileOutputFormat.setOutputPath(job, outputIterationPath);
-
             job.waitForCompletion(true);
-
-            // Update centroids file for next iteration
+            // This is here in order to update the files after each iteration
             centroidsPath = outputPath + "_iter_" + iteration + "/part-r-00000";
-
             iteration++;
         }
 
